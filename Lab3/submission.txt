@@ -1,0 +1,536 @@
+/* 
+	Members:
+	Mishita Kodnani 1410110246
+	Nishank Saini 1410110266
+	Pragya Chaturvedi 1410110289
+	Sushant Bansal 1410110454
+*/
+
+/* Server */
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <sys/time.h>
+#include <time.h>
+// #include <pthread.h>
+
+#define SERVER_PORT 6001
+#define BUF_SIZE 40480
+#define DEBUG 0
+// #define NUM_SEQUENCES_STATIC 6
+#define DATA_BUF_SIZE 36864
+
+typedef struct fileRequest
+  {
+    uint8_t type; //0
+    uint8_t filename_size;
+    char filename[50];
+  }fR_t;
+
+  typedef struct acknowledgement
+  {
+    uint8_t type; //1
+    uint8_t num_sequences;
+  }ack;
+
+  typedef struct fileInfoAndData
+  {
+    uint8_t type ; //2
+    uint16_t sequence_number;
+    uint8_t filename_size;
+    char filename[50];
+    uint32_t file_size;
+    uint16_t block_size;
+    char data[DATA_BUF_SIZE];
+  }fiD;
+
+  typedef struct receivedData
+  {
+    uint8_t type; //3
+    uint16_t sequence_number;
+    uint16_t block_size;
+    char data[DATA_BUF_SIZE];
+  }rcvD;
+
+  typedef struct FileNotFound
+  {
+    uint8_t type; //4
+    uint8_t filename_size;
+    char filename[50];
+  }fnf_t;
+
+int main(int argc, char * argv[]){
+  struct sockaddr_in sin;
+  struct sockaddr_storage client_addr;
+  char clientIP[INET_ADDRSTRLEN]; /* For IPv4 addresses */
+  socklen_t client_addr_len;
+  char buf[BUF_SIZE];
+  char datbuf[DATA_BUF_SIZE];
+  int len;
+  int s;
+  char *host;
+  struct hostent *hp;
+  ssize_t bytesSent, bytesRead, totalFileSize, bytesReceived, dataLen;
+  int i = 1;
+   struct timespec tim, tim2;
+  struct timeval timeout;
+  timeout.tv_sec = 5;
+  timeout.tv_usec = 0;
+  
+  tim.tv_sec = 2;
+  tim.tv_nsec = 0;
+  int firstPacket = 1;
+  // pthread_t attr1,attr2,attr3,attr4,att5;
+
+  // Declarations for file(s) to be sent 
+     FILE *fp;
+
+  /* For inserting delays, use nanosleep()
+     struct timespec ... */ 
+ 
+
+  /* To get filename from commandline */
+    
+   
+  /* Create a socket */
+  if ((s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
+    perror("server: socket");
+    exit(1);
+  }
+ 
+ 
+  /* build address data structure and bind to all local addresses*/
+  memset((char *)&sin, 0, sizeof(sin));
+  sin.sin_family = AF_INET;
+ 
+  /* If socket IP address specified, bind to it. */
+  if(argc == 2) {
+    host = argv[1];
+    hp = gethostbyname(host);
+    if (!hp) {
+      fprintf(stderr, "server: unknown host %s\n", host);
+      exit(1);
+    }
+    memcpy((char *)&sin.sin_addr, hp->h_addr, hp->h_length);
+  }
+  /* Else bind to 0.0.0.0 */
+  else
+    sin.sin_addr.s_addr = INADDR_ANY;
+  
+  sin.sin_port = htons(SERVER_PORT);
+  
+  if ((bind(s, (struct sockaddr *)&sin, sizeof(sin))) < 0) {
+    perror("server: bind");
+    exit(1);
+  }
+  else{
+    /* Add code to parse IPv6 addresses */
+    inet_ntop(AF_INET, &(sin.sin_addr), clientIP, INET_ADDRSTRLEN);   //converting sin.sin_addr into a character string
+    printf("Server is listening at address %s:%d\n", clientIP, SERVER_PORT);
+  }
+  
+  printf("Client needs to send FileName to receive the file %s\n", argv[1]);
+    
+  
+  client_addr_len = sizeof(sin);
+  // gettimeofday(&t1,NULL);
+  /* Receive messages from clients*/
+  
+  fR_t reqRecieved ;
+  fiD fPack;
+  rcvD dataToBeSent;
+  ack ackR;
+  fnf_t notFound;  
+  int altSeqNumber = 1;
+
+  while(len = recvfrom(s, buf, sizeof(buf), 0,
+		       (struct sockaddr *)&sin, &client_addr_len)){
+  	i=1;
+  	memcpy(&reqRecieved,buf,sizeof(buf));
+    if(DEBUG == 1){
+      printf(" Type :%u \n ",reqRecieved.type);
+      printf("Size : %u \n",reqRecieved.filename_size);
+      printf("Name: %s \n",reqRecieved.filename);
+    }
+
+    inet_ntop(client_addr.ss_family,
+        &(((struct sockaddr_in *)&client_addr)->sin_addr),
+        clientIP, INET_ADDRSTRLEN);      //converting clientIP into a string
+
+    
+      if(reqRecieved.type == 0){
+      fp = fopen(reqRecieved.filename, "rb");  //opening it in reading mode
+      if (fp == NULL) {
+        notFound.type = 4;
+        notFound.filename_size = reqRecieved.filename_size;
+        strcpy(notFound.filename,reqRecieved.filename);
+        memcpy(&buf,&notFound,sizeof(notFound));
+        printf("Size of Not Found:%ld\n",sizeof(notFound));
+        fprintf(stderr, "File Not Found !\n");
+        if((bytesSent = sendto(s, buf, sizeof(notFound), 0, (struct sockaddr*)&sin, sizeof(sin)))==-1)
+        {
+          perror("FNF:Ack Not Send");
+          exit(0);
+        }
+        exit(0);
+      }
+      else{
+        printf("File Found: %s , Sending Now!\n",reqRecieved.filename);
+        //nanosleep(&tim,&tim2);
+        //fflush(fp);
+          i=1;
+          totalFileSize = 0;      
+        //fprintf(stderr, "Check OUTSIDE OUT\n");
+        while((bytesRead = fread(datbuf,1,DATA_BUF_SIZE,fp)) > 0 ){
+          
+          //fprintf(stderr,"Check Outside \n");
+          
+          if(firstPacket == 1){
+            //fprintf(stderr,"Check Inside \n");
+            fPack.type = 2;
+            fPack.sequence_number = 1;
+            fPack.filename_size = reqRecieved.filename_size;
+            strcpy(fPack.filename,reqRecieved.filename);
+            fPack.block_size = bytesRead;
+            memcpy(&fPack.data,&datbuf,bytesRead);
+            //memset(datbuf, 0, sizeof(datbuf));
+            memcpy(&buf,&fPack,sizeof(fPack));
+            dataLen = sizeof(fPack);
+            //memset(&fPack, 0, sizeof(fPack));
+            firstPacket = 0;
+            //fflush(fp);
+            if(DEBUG == 1){
+              printf("Alt Seq No: %d \n",altSeqNumber);
+              printf("bytesRead: %ld\n",bytesRead );  
+            }            
+          }
+          else{
+            dataToBeSent.type = 3;
+            if(altSeqNumber == 1){
+              dataToBeSent.sequence_number = 0;
+              altSeqNumber = 0;
+            }
+            else{
+             dataToBeSent.sequence_number = 1; 
+             altSeqNumber = 1;
+            }
+
+            dataToBeSent.block_size = bytesRead;
+            memcpy(&dataToBeSent.data,&datbuf,bytesRead);
+            memcpy(&buf,&dataToBeSent,sizeof(dataToBeSent));
+            dataLen = sizeof(dataToBeSent);
+            //memset(datbuf, 0, sizeof(datbuf));
+            //fflush(fp);
+            if(DEBUG == 1)
+              printf("Alt Seq No: %d \n",altSeqNumber);
+          }
+          while(ackR.type != 1){
+                    if((bytesSent = sendto(s, buf, dataLen, 0, (struct sockaddr*)&sin, client_addr_len) ) < 0){
+                      perror("File not sent \n");
+                      return -1;
+                    }
+                    if(DEBUG == 1)
+                      printf(" bytesSent: %ld\n",bytesSent);
+                    if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO,&timeout,sizeof(timeout)) < 0) {
+                        perror("Error");
+                    }
+                    if((bytesReceived = recvfrom(s, buf, BUF_SIZE, 0,(struct sockaddr *)&sin, &client_addr_len))<0){
+                      //timeout
+                      printf("Acknowledgement not recieved, resending packet");
+                      // if((bytesSent = sendto(s, buf, dataLen, 0, (struct sockaddr*)&sin, client_addr_len) ) < 0){
+                      //   perror("File not sent \n");
+                      //   return -1;
+                      // } 
+                    }
+          memcpy(&ackR,&buf,bytesReceived);
+          }
+          if(DEBUG == 1)
+            printf("bytesReceived: %ld\n",bytesReceived);
+          
+          if(ackR.type == 1){
+            printf("Ack Recieved! \n");
+            bytesReceived = 0;  
+          }
+          totalFileSize += bytesSent;
+          printf("Loop Number: %d Bytes Read: %ld , Bytes Sent: %ld , Total Bytes sent : %ld \n",i,bytesRead,bytesSent,totalFileSize);
+          i++;
+          fflush(fp);
+          ackR.type = 40;  
+        }
+          
+      }
+    }
+    //fclose(fp);
+    fflush(fp);
+    /* Send BYE to signal termination */
+    strcpy(buf, "BYE");
+    sendto(s, buf, sizeof("BYE"), 0, 
+   (struct sockaddr*)&sin, client_addr_len);
+    printf("File Sent!\n"); //nothing gets executed after this!
+    //puts("TEST \n"); //testing
+    memset(buf, 0, sizeof(buf));
+    exit(0);
+
+
+  }
+}
+
+
+/* Client */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <sys/time.h>
+#include <malloc.h>
+
+#define SERVER_PORT 6001
+#define BUF_SIZE 40480
+#define DEBUG 0
+// #define NUM_SEQUENCES_STATIC 6
+#define DATA_BUF_SIZE 36864
+
+typedef struct fileRequest
+  {
+    uint8_t type; //0
+    uint8_t filename_size;
+    char filename[50];
+  }fR_t;
+
+  typedef struct acknowledgement
+  {
+    uint8_t type; //1
+    uint8_t num_sequences;
+  }ack;
+
+  typedef struct fileInfoAndData
+  {
+    uint8_t type ; //2
+    uint16_t sequence_number;
+    uint8_t filename_size;
+    char filename[50];
+    uint32_t file_size;
+    uint16_t block_size;
+    char data[DATA_BUF_SIZE];
+  }fiD;
+
+  typedef struct receivedData
+  {
+    uint8_t type; //3
+    uint16_t sequence_number;
+    uint16_t block_size;
+    char data[DATA_BUF_SIZE];
+  }rcvD;
+
+  typedef struct FileNotFound
+  {
+    uint8_t type; //4
+    uint8_t filename_size;
+    char filename[50];
+  }fnf_t;
+
+
+int main(int argc, char * argv[]){
+  
+  FILE *fp;
+  struct hostent *hp;
+  struct sockaddr_in sin;
+  char *host;
+  char buf[BUF_SIZE];
+  int s,i=1;
+  int len;
+  ssize_t rcv;
+  socklen_t addrlen;
+
+  if ((argc==2)||(argc == 3)) {       //assigns the first command line argument as the chosen IP
+    host = argv[1];
+  }
+  else {
+    fprintf(stderr, "usage: client serverIP [download_filename(optional)]\n");
+    exit(1);
+  }
+
+  /* translate host name into peer's IP address */
+  hp = gethostbyname(host);         //get the host's IP address using the first command line argument
+  if (!hp) {
+    fprintf(stderr, "client: unknown host: %s\n", host);
+    exit(1);
+  }
+  else
+    printf("Host %s found!\n", argv[1]);
+
+  /* build address data structure */
+  memset((char *)&sin, 0, sizeof(sin));
+  sin.sin_family = AF_INET;
+  memcpy((char *)&sin.sin_addr, hp->h_addr, hp->h_length);    //copies the memory area from the host address to the socket address
+  sin.sin_port = htons(SERVER_PORT);
+  
+
+  /* create socket */
+  if ((s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {       //creating a socket for the Internet domain, and for handling file transfer
+    perror("client: socket");
+    exit(1);
+  }
+
+  printf("Client will get data from to %s:%d.\n", argv[1], SERVER_PORT);
+  printf("To play the music, pipe the download file to a player, e.g., ALSA, SOX, VLC: cat recvd_file.wav | vlc -\n"); 
+  
+  struct timeval t1,t2;
+  int dataRate, elapsedTime;
+  ssize_t totalSize = 0,totalTime = 0;
+  
+  fR_t request;
+    /* send message to server */
+  printf("Enter file name to be received \n");  
+  //fgets(buf, sizeof(buf), stdin);
+  scanf("%s",&buf);
+  //buf[BUF_SIZE-1] = '\0';
+  fp = fopen(buf, "wb");
+  if (fp == NULL) {
+    fprintf(stderr, "Error opening output file\n");
+    exit(1);
+  }
+  len = strlen(buf) + 1;
+  if(DEBUG == 1){
+    printf("Len:  %d \n",len);
+    printf("Buf: %sx \n",buf);  
+  }
+  request.type = 0;
+  request.filename_size = len;
+  strcpy(request.filename,buf);
+  memcpy(&buf,&request,sizeof(request));
+  if (sendto(s, buf, sizeof(buf), 0, (struct sockaddr *)&sin, sizeof(sin)) < 0) {     //using sendto() instead of send() for implementing UDP
+    perror("Client: sendto()"); 
+    return 0; 
+  }
+    
+  /* get reply, display it or store in a file*/ 
+  /* Add code to receive unlimited data and either display the data
+     or if specified by the user, store it in the specified file. 
+     Instead of recv(), use recvfrom() call for receiving data */
+    //fputs(buf, stdout);
+  int altSeqNumber = 0;
+  int firstPack =1;
+  // int typex;
+  fnf_t notFound;
+  fiD fPackRecv;
+  rcvD dataToBeRecv;
+  ack ackS;
+  addrlen = sizeof(sin);
+  gettimeofday(&t1,NULL);
+  // printf("Waiting to Receive\n");
+  while((rcv = recvfrom(s, buf, BUF_SIZE, 0, (struct sockaddr *)&sin, &addrlen))>0){  //as long as the file is being received successfully
+    printf("\nLoop Number: %d Received Bytes : %ld \n",i,rcv);
+	 i++;
+	 totalSize += rcv;
+    if(strcmp("BYE",buf)==0){
+    	printf("BUF >> %s\n",buf);
+        printf("File Received \n");
+        printf("Client Closing \n");
+    	fclose(fp);
+    	break;    
+    }
+
+    if(rcv < 53){
+    	memcpy(&notFound,&buf,rcv);
+    }
+    else if(firstPack == 1){
+    	memcpy(&fPackRecv,&buf,rcv);	
+    }
+    else{
+    	memcpy(&dataToBeRecv,&buf,rcv);
+    }
+    
+    if(DEBUG == 1){
+    	printf("--------------------------\n");
+    	printf("BUF >> %s\n",buf);
+    	printf("Rcv : %ld \n",rcv);
+    	printf("notFound.type : %d \n",notFound.type);
+    	printf("fPack.type : %d \n",fPackRecv.type);
+    	// typex = fPackRecv.type;
+    	printf("dataPack.type : %d \n",dataToBeRecv.type);
+    }
+    if(notFound.type == 4){
+    	printf("File Not Found\n");
+    	printf("File Name:%s\n",notFound.filename);
+    	printf("Server returned FALSE, Client Exiting!\n");
+    	exit(0);
+    }
+    if(fPackRecv.type == 2){
+    	if(DEBUG == 1){
+    	   	printf("fPackRecv.sequence_number %d\n",fPackRecv.sequence_number );
+    	   	printf("altSeqNumber %d\n",altSeqNumber );
+    		printf("Data Block Size: %d\n",fPackRecv.block_size);
+    	}
+    	firstPack = 0;
+    	printf("File Found\n");
+    	
+     	// totalSize += fPackRecv.block_size;
+     	fflush(fp);
+     	if(altSeqNumber != fPackRecv.sequence_number){
+     		if(fwrite(fPackRecv.data,1,fPackRecv.block_size,fp)<0){
+     			perror("Error Writing to File");
+     		}	
+     	altSeqNumber = 1;
+     	}
+     	ackS.type = 1;
+     	ackS.num_sequences = fPackRecv.sequence_number;
+     	memset(buf, 0, sizeof(buf));
+     	memcpy(&buf,&ackS,sizeof(ackS));
+     	if (sendto(s, buf, sizeof(ackS), 0, (struct sockaddr *)&sin, sizeof(sin)) < 0) {     //using sendto() instead of send() for implementing UDP
+     	  perror("Client: sendto()"); 
+     	  return 0; 
+     	}
+     	fPackRecv.type = 55;
+    }
+    else if(dataToBeRecv.type == 3){
+    	// printf("\nLoop Number: %d Received Bytes : %ld \n",i,rcv);
+     // 	i++;
+     	// totalSize += dataToBeRecv.block_size;
+     	if(DEBUG == 1){
+     	    printf("dataToBeRecv.sequence_number %d\n",dataToBeRecv.sequence_number);
+     	    printf("altSeqNumber %d\n",altSeqNumber );
+     	    printf("Data Block Size: %d\n",dataToBeRecv.block_size);
+     	}
+     	fflush(fp);
+     	if(dataToBeRecv.sequence_number != altSeqNumber){
+     		if(fwrite(dataToBeRecv.data,1,dataToBeRecv.block_size,fp)<0){
+     			perror("Error Writing to File");
+     		}
+     		if(altSeqNumber == 1)
+     			altSeqNumber = 0;
+     		else
+     			altSeqNumber = 1;	
+     	}
+
+     	ackS.type = 1;
+     	ackS.num_sequences = fPackRecv.sequence_number;
+     	memset(buf, 0, sizeof(buf));
+     	memcpy(&buf,&ackS,sizeof(ackS));
+     	if (sendto(s, buf, sizeof(ackS), 0, (struct sockaddr *)&sin, sizeof(sin)) < 0) {     //using sendto() instead of send() for implementing UDP
+     	  perror("Client: sendto()"); 
+     	  return 0; 
+     	}
+    	memset(&dataToBeRecv, 0, sizeof(dataToBeRecv));
+    }
+    	
+    }
+		
+	gettimeofday(&t2,NULL);
+    //the elapsed time is calculated as the difference between the two gettimeofday() calls 
+    elapsedTime = (t2.tv_sec - t1.tv_sec)*1000000L + (t2.tv_usec - t1.tv_usec);
+    // totalTime += elapsedTime;
+    printf("Elapsed time %d micro seconds\n", elapsedTime);
+    dataRate = (totalSize)/elapsedTime;
+    printf("Data rate : %d bytes/micro second\n",dataRate);
+  	exit(0);
+}
