@@ -68,7 +68,7 @@ int main(int argc, char * argv[]){
   struct hostent *hp;
   ssize_t bytesSent, bytesRead, totalFileSize, bytesReceived, dataLen;
   int i = 1;
-   struct timespec tim, tim2;
+  struct timespec tim, tim2;
   struct timeval timeout;
   timeout.tv_sec = 2;
   timeout.tv_usec = 0;

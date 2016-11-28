@@ -13,8 +13,36 @@
 #include <netdb.h>
 #include <sys/ioctl.h>
 
-#define MC_PORT 5432
+#define PORT 5432
 #define BUF_SIZE 4096
+#define SITE_NAME_SIZE 20
+#define SITE_DESC_SIZE 50
+#define STATION_COUNT 1
+#define STATION_NAME_SIZE 20
+
+typedef struct station_info{
+  uint8_t station_number;
+  uint8_t station_name_size;
+  char station_name[ STATION_NAME_SIZE ];
+  uint32_t multicast_address;
+  uint16_t data_port;
+  uint16_t info_port;
+  uint32_t bit_rate;
+}station_t;
+
+typedef struct site_info{
+  uint8_t type ; //10
+  uint8_t site_name_size;
+  char site_name[SITE_NAME_SIZE];
+  uint8_t site_desc_size;
+  char site_desc[SITE_DESC_SIZE];
+  uint8_t station_count;
+  station_t station_list [STATION_COUNT];
+}site_t;
+
+typedef struct station_info_request{
+  uint8_t type ;//1 
+}sireq_t;
 
 
 int main(int argc, char * argv[]){
@@ -24,29 +52,25 @@ int main(int argc, char * argv[]){
   char *if_name; /* name of interface */
   struct ifreq ifr; /* interface struct */
   char buf[BUF_SIZE];
+  char *host;
   int len;
   /* Multicast specific */
+  int MC_PORT = 0;
   char *mcast_addr; /* multicast address */
   struct ip_mreq mcast_req;  /* multicast join struct */
   struct sockaddr_in mcast_saddr; /* multicast sender*/
   socklen_t mcast_saddr_len;
 
 
-  /* Add code to take port number from user */
-  if ((argc==2)||(argc == 3)) {
-    mcast_addr = argv[1];
-  }
-  else {
-    fprintf(stderr, "usage:(sudo) receiver multicast_address [interface_name (optional)]\n");
-    exit(1);
-  }
+  
 
+  /* Add code to take port number from user */
+  
   if(argc == 3) {
     if_name = argv[2];
   }
   else
-    if_name = "wlan0";
-
+    if_name = "wl01";
 
   /* create socket */
   if ((s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -81,7 +105,7 @@ int main(int argc, char * argv[]){
   
   /* Multicast specific code follows */
   
-  /* build IGMP join message structure */
+   build IGMP join message structure 
   mcast_req.imr_multiaddr.s_addr = inet_addr(mcast_addr);
   mcast_req.imr_interface.s_addr = htonl(INADDR_ANY);
 
@@ -118,4 +142,5 @@ int main(int argc, char * argv[]){
   
   close(s);
   return 0;
+
 }
