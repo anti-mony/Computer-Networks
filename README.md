@@ -1,5 +1,5 @@
 # Computer-Networks
-Code for the Lab of course Computer Networks **[CSD304]** as oofered in Shiv Nadar University.
+Code for the Lab of course [Computer Networks **[CSD304]**](https://sites.google.com/a/snu.edu.in/shashi-prabh/teaching/computer-networks-2016) as oofered in Shiv Nadar University.
 
 ---
 
