@@ -3,13 +3,13 @@ Code* for the Lab of course [Computer Networks **[CSD304]**](https://sites.googl
 
 ---
 
-###Lab2                                                                                                              
+### Lab2                                                                                                              
 Transmission of a file over UDP.
 
-###Lab3  
+### Lab3  
 Transmission of a file over UDP, reliably. Implemented **stop and wait** algorithm for reliable packet delivery.
 
-###Lab4  
-Multicast Internet Radio
+### Lab4  
+Multicast Internet Radio. Needs Updates
 
 **[* Needs a complete overhaul]**
