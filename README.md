@@ -1,15 +1,15 @@
-# Computer-Networks
-Code* for the Lab of course [Computer Networks **[CSD304]**](https://sites.google.com/a/snu.edu.in/shashi-prabh/teaching/computer-networks-2016) as offered in Shiv Nadar University.
+# Computer-Networks Coursework
+Coursework for the course [Computer Networks **[CSD304]**](https://sites.google.com/a/snu.edu.in/shashi-prabh/teaching/computer-networks-2016) as offered in Shiv Nadar University.
 
 ---
 
-### Lab2                                                                                                              
-Transmission of a file over UDP.
+### Capstone Multicast Internet Radio                                                                                                             
+A multicast server and reciever which can cast four channels over a network and the the reciever can choose which to connect to and have the usual play, pause and stop controls.
 
-### Lab3  
-Transmission of a file over UDP, reliably. Implemented **stop and wait** algorithm for reliable packet delivery.
+### Extras
 
-### Lab4  
-Multicast Internet Radio. Needs Updates
+1. UDP Socket Server
+	Implementation of a datagram socket server in C
 
-**[* Needs a complete overhaul]**
+2. Reliable-Transmission over UDP
+	Implementation of Wait-Die Scheme over datagram connection to ensure reliable packet delivery.
